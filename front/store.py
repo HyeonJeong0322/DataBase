@@ -3,41 +3,7 @@ from tkinter import messagebox, ttk
 from datetime import datetime
 from tkcalendar import Calendar
 import pymysql
-
-# 데이터베이스 연결 설정
-def connect_to_db():
-    return pymysql.connect(
-        host='localhost', user='tester01', password='123456', db='new1', charset='utf8'
-    )
-
-# 공통: 데이터 조회 함수
-def fetch_data(query, params=()):
-    try:
-        conn = connect_to_db()
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        return cursor.fetchall()
-    except pymysql.MySQLError as e:
-        messagebox.showerror("오류", f"데이터베이스 오류: {e}")
-        return []
-    finally:
-        if conn:
-            conn.close()
-
-# 공통: 데이터 삽입/수정 함수
-def execute_query(query, params):
-    try:
-        conn = connect_to_db()
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        conn.commit()
-        return True
-    except pymysql.MySQLError as e:
-        messagebox.showerror("오류", f"데이터베이스 오류: {e}")
-        return False
-    finally:
-        if conn:
-            conn.close()
+import connectDB
 
 # 판매 기록 관리 화면
 def sales_record_screen():
@@ -53,7 +19,7 @@ def sales_record_screen():
         JOIN customers c ON s.customer_id = c.id
         ORDER BY s.id ASC
         """
-        rows = fetch_data(query)
+        rows = connectDB.fetch_data(query)
         for row in rows:
             tree.insert("", "end", values=row)
 
@@ -67,6 +33,7 @@ def sales_record_screen():
 
     show_sales_records()  # 판매 기록 조회
 
+# 저장 재고 관리 화면
 def stock_screen():
     stock_window = tk.Toplevel(root)
     stock_window.title("재고 관리 화면")
@@ -74,7 +41,7 @@ def stock_screen():
     def get_food_ingredients(food_name):
         """음식에 필요한 재료 및 수량 조회"""
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("""
             SELECT i.name, fi.quantity, i.unit
@@ -111,7 +78,7 @@ def stock_screen():
     def is_valid_ingredient_id(ingredient_id):
         """식자재 ID가 유효한지 확인"""
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM ingredients WHERE id = %s", (ingredient_id,))
             result = cursor.fetchone()
@@ -124,7 +91,7 @@ def stock_screen():
     def get_cheapest_supplier_for_ingredient(ingredient_id):
         """주어진 식자재에 대해 가장 저렴한 공급자를 찾기"""
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("""
             SELECT s.id, s.name, si.unit_price
@@ -169,7 +136,7 @@ def stock_screen():
         VALUES (%s, %s, %s, %s, %s, %s)
         """
         params = (ingredient_id, quantity, received_date, expiration_date, supplier_id, datetime.now())
-        if execute_query(sql, params):
+        if connectDB.execute_query(sql, params):
             messagebox.showinfo("성공", "재고가 추가되었습니다.")
             show_stock()
 
@@ -185,7 +152,7 @@ def stock_screen():
         LEFT JOIN suppliers su ON s.supplier_id = su.id  -- stock 테이블에서 supplier_id를 직접 가져옴
         ORDER BY s.id ASC
         """
-        rows = fetch_data(query)
+        rows = connectDB.fetch_data(query)
         
         for row in rows:
             tree.insert("", "end", values=row)
@@ -243,7 +210,6 @@ def stock_screen():
 
     show_stock()
 
-
 # 사용 기록 관리 화면
 def usage_screen():
     usage_window = tk.Toplevel(root)
@@ -252,7 +218,7 @@ def usage_screen():
     def show_usage():
         tree.delete(*tree.get_children())
         # usage_records 테이블에서 데이터를 가져와서 표시
-        rows = fetch_data("SELECT ur.id, ur.ingredient_id, ur.usage_date, ur.quantity, ur.purpose, ur.created_at "
+        rows = connectDB.fetch_data("SELECT ur.id, ur.ingredient_id, ur.usage_date, ur.quantity, ur.purpose, ur.created_at "
                           "FROM usage_records ur "
                           "JOIN ingredients i ON ur.ingredient_id = i.id "
                           "ORDER BY ur.id ASC")
@@ -289,7 +255,7 @@ def food_recipe_screen():
         JOIN foods f ON fi.food_id = f.id
         WHERE f.name = %s
         """
-        return fetch_data(query, (food_name,))
+        return connectDB.fetch_data(query, (food_name,))
     
     def show_food_recipes():
         """음식 레시피와 재고 상태를 표시"""
@@ -322,7 +288,7 @@ def food_recipe_screen():
                          WHERE f.name = %s)
         ORDER BY s.ingredient_id ASC
         """
-        stock_data = fetch_data(query, (food_name,))
+        stock_data = connectDB.fetch_data(query, (food_name,))
         
         # 재고 리스트 업데이트
         for widget in frame_stock.winfo_children():
@@ -349,7 +315,7 @@ def food_recipe_screen():
         SELECT f.id, %s, %s FROM foods f WHERE f.name = %s
         """
         params = (ingredient_id, quantity, food_name)
-        if execute_query(sql, params):
+        if connectDB.execute_query(sql, params):
             messagebox.showinfo("성공", "음식 레시피가 추가되었습니다.")
             show_food_recipes()
 
@@ -370,7 +336,7 @@ def food_recipe_screen():
         AND ingredient_id = %s
         """
         params = (quantity, food_name, ingredient_id)
-        if execute_query(sql, params):
+        if connectDB.execute_query(sql, params):
             messagebox.showinfo("성공", "음식 레시피가 수정되었습니다.")
             show_food_recipes()
 
@@ -389,7 +355,7 @@ def food_recipe_screen():
         VALUES (%s, %s, %s, %s)
         """
         params = (food_name, price, description, datetime.now())
-        if execute_query(sql, params):
+        if connectDB.execute_query(sql, params):
             messagebox.showinfo("성공", f"{food_name} 음식이 추가되었습니다.")
             # 음식 추가 후, 콤보박스에 새로운 음식 추가
             food_combobox['values'] = food_combobox['values'] + (food_name,)

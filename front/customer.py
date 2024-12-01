@@ -2,41 +2,8 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import datetime
 import pymysql
+import connectDB
 
-# 데이터베이스 연결 설정
-def connect_to_db():
-    return pymysql.connect(
-        host='localhost', user='tester01', password='123456', db='new1', charset='utf8'
-    )
-
-# 공통: 데이터 조회 함수
-def fetch_data(query, params=()):
-    try:
-        conn = connect_to_db()
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        return cursor.fetchall()
-    except pymysql.MySQLError as e:
-        messagebox.showerror("오류", f"데이터베이스 오류: {e}")
-        return []
-    finally:
-        if conn:
-            conn.close()
-
-# 공통: 데이터 삽입/수정 함수
-def execute_query(query, params):
-    try:
-        conn = connect_to_db()
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        conn.commit()
-        return True
-    except pymysql.MySQLError as e:
-        messagebox.showerror("오류", f"데이터베이스 오류: {e}")
-        return False
-    finally:
-        if conn:
-            conn.close()
 
 # 고객 화면 (음식 주문)
 def customer_screen():
@@ -45,7 +12,7 @@ def customer_screen():
 
     def get_food_id(food_name):
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM foods WHERE name = %s", (food_name,))
             result = cursor.fetchone()
@@ -60,7 +27,7 @@ def customer_screen():
 
     def get_max_order_quantity(food_id):
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
 
             # 음식에 필요한 재료 및 수량을 조회
@@ -97,7 +64,7 @@ def customer_screen():
     def get_customer_id_by_name(customer_name):
         """고객 이름으로 고객 ID 조회, 없으면 None 반환"""
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM customers WHERE name = %s", (customer_name,))
             result = cursor.fetchone()
@@ -110,7 +77,7 @@ def customer_screen():
     def add_new_customer(customer_name):
         """새 고객 추가 후 고객 ID 반환"""
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("INSERT INTO customers (name) VALUES (%s)", (customer_name,))
             conn.commit()
@@ -147,7 +114,7 @@ def customer_screen():
                 return
 
             # 음식 가격 조회
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("SELECT price FROM foods WHERE id = %s", (food_id,))
             food_price = cursor.fetchone()[0]  # 음식 가격
@@ -176,14 +143,14 @@ def customer_screen():
                 VALUES (%s, %s, %s, %s, %s)
                 """
                 params = (ingredient_id, datetime.now().date(), required_quantity * int(quantity), "음식 주문", datetime.now())
-                execute_query(sql, params)
+                connectDB.execute_query(sql, params)
 
             # 주문 처리 후, `sales` 테이블에 기록 추가
             sql = """
             INSERT INTO sales (customer_id, total_amount, sale_date)
             VALUES (%s, %s, %s)
             """
-            if execute_query(sql, (customer_id, total_amount, datetime.now().date())):
+            if connectDB.execute_query(sql, (customer_id, total_amount, datetime.now().date())):
                 messagebox.showinfo("성공", f"{menu_item} 주문이 완료되었습니다.")
                 return
 
@@ -226,7 +193,7 @@ def customer_list_screen():
         try:
             query = "INSERT INTO customers (name, phone, email) VALUES (%s, %s, %s)"
             params = (name, phone, email)
-            if execute_query(query, params):
+            if connectDB.execute_query(query, params):
                 messagebox.showinfo("성공", f"{name}님이 추가되었습니다.")
                 load_customers()  # 새로 추가된 손님 리스트 갱신
             else:
@@ -244,7 +211,7 @@ def customer_list_screen():
         customer_id = customer_treeview.item(selected_item)['values'][0]
         try:
             query = "DELETE FROM customers WHERE id = %s"
-            if execute_query(query, (customer_id,)):
+            if connectDB.execute_query(query, (customer_id,)):
                 messagebox.showinfo("성공", "손님이 삭제되었습니다.")
                 load_customers()  # 삭제 후 리스트 갱신
             else:
@@ -258,7 +225,7 @@ def customer_list_screen():
             customer_treeview.delete(item)
 
         query = "SELECT id, name, phone, email, membership_status FROM customers"
-        customers = fetch_data(query)
+        customers = connectDB.fetch_data(query)
 
         for customer in customers:
             customer_treeview.insert("", "end", values=customer)

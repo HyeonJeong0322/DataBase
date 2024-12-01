@@ -1,43 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import datetime
-from tkcalendar import Calendar
 import pymysql
-
-# 데이터베이스 연결 설정
-def connect_to_db():
-    return pymysql.connect(
-        host='localhost', user='tester01', password='123456', db='new1', charset='utf8'
-    )
-
-# 공통: 데이터 조회 함수
-def fetch_data(query, params=()):
-    try:
-        conn = connect_to_db()
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        return cursor.fetchall()
-    except pymysql.MySQLError as e:
-        messagebox.showerror("오류", f"데이터베이스 오류: {e}")
-        return []
-    finally:
-        if conn:
-            conn.close()
-
-# 공통: 데이터 삽입/수정 함수
-def execute_query(query, params):
-    try:
-        conn = connect_to_db()
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        conn.commit()
-        return True
-    except pymysql.MySQLError as e:
-        messagebox.showerror("오류", f"데이터베이스 오류: {e}")
-        return False
-    finally:
-        if conn:
-            conn.close()
+import connectDB
 
 # 공급업체 리스트 화면
 def supplier_list_screen():
@@ -59,14 +24,14 @@ def supplier_list_screen():
         VALUES (%s, %s, %s, %s, %s)
         """
         params = (name, contact, address, email, datetime.now())
-        if execute_query(sql, params):
+        if connectDB.execute_query(sql, params):
             messagebox.showinfo("성공", "공급업체가 추가되었습니다.")
             show_suppliers()
 
     def show_suppliers():
         """공급업체 목록 표시"""
         tree.delete(*tree.get_children())
-        rows = fetch_data("SELECT id, name, contact, address, email FROM suppliers ORDER BY id ASC")
+        rows = connectDB.fetch_data("SELECT id, name, contact, address, email FROM suppliers ORDER BY id ASC")
         for row in rows:
             tree.insert("", "end", values=row)
 
@@ -82,7 +47,7 @@ def supplier_list_screen():
         if confirm:
             sql = "DELETE FROM suppliers WHERE id = %s"
             params = (supplier_id,)
-            if execute_query(sql, params):
+            if connectDB.execute_query(sql, params):
                 messagebox.showinfo("성공", f"공급업체 ID {supplier_id}가 삭제되었습니다.")
                 show_suppliers()
 
@@ -125,7 +90,7 @@ def supplier_screen():
     def get_supplied_ingredients(supplier_id):
         """공급자가 공급하는 재료 목록 조회"""
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("""
             SELECT i.name, i.category, si.unit_price, si.id, si.ingredient_id
@@ -148,7 +113,7 @@ def supplier_screen():
         
         # 공급자 ID 조회
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM suppliers WHERE name = %s", (supplier_name,))
             supplier_id = cursor.fetchone()[0]
@@ -195,7 +160,7 @@ def supplier_screen():
         
         # ingredients 테이블에 재료 추가
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("INSERT INTO ingredients (name, category, unit, storage_method) VALUES (%s, %s, %s, %s)", 
                         (ingredient_name, category, unit, storage_method))
@@ -235,7 +200,7 @@ def supplier_screen():
                 return
             
             try:
-                conn = connect_to_db()
+                conn = connectDB.connect_to_db()
                 cursor = conn.cursor()
                 cursor.execute("""
                 UPDATE supplier_ingredients
@@ -269,7 +234,7 @@ def supplier_screen():
         def confirm_delete():
             """삭제 확인"""
             try:
-                conn = connect_to_db()
+                conn = connectDB.connect_to_db()
                 cursor = conn.cursor()
                 
                 
@@ -303,7 +268,7 @@ def supplier_screen():
     def load_supplier_list():
         """공급자 목록을 데이터베이스에서 가져오기"""
         try:
-            conn = connect_to_db()
+            conn = connectDB.connect_to_db()
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM suppliers")
             suppliers = cursor.fetchall()

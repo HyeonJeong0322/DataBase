@@ -88,26 +88,6 @@ def stock_screen():
             messagebox.showerror("오류", f"데이터베이스 오류: {e}")
             return False
 
-    def get_cheapest_supplier_for_ingredient(ingredient_id):
-        """주어진 식자재에 대해 가장 저렴한 공급자를 찾기"""
-        try:
-            conn = connectDB.connect_to_db()
-            cursor = conn.cursor()
-            cursor.execute("""
-            SELECT s.id, s.name, si.unit_price
-            FROM suppliers s
-            JOIN supplier_ingredients si ON s.id = si.supplier_id
-            WHERE si.ingredient_id = %s
-            ORDER BY si.unit_price ASC
-            LIMIT 1
-            """, (ingredient_id,))
-            supplier = cursor.fetchone()
-            conn.close()
-            return supplier  # 공급자 ID, 공급자 이름, 가격을 반환
-        except pymysql.MySQLError as e:
-            messagebox.showerror("오류", f"데이터베이스 오류: {e}")
-            return None
-
     def add_stock():
         """재고 추가"""
         ingredient_id = entry_ingredient_id.get()
@@ -119,43 +99,26 @@ def stock_screen():
             messagebox.showwarning("입력 오류", "모든 필드를 입력해주세요.")
             return
 
-        if not is_valid_ingredient_id(ingredient_id):
-            messagebox.showwarning("입력 오류", "유효하지 않은 식자재 ID입니다.")
-            return
+        query = "CALL add_stock_procedure(%s, %s, %s, %s)"
+        params = (ingredient_id, quantity, received_date, expiration_date)
 
-        supplier = get_cheapest_supplier_for_ingredient(ingredient_id)
-        if supplier is None:
-            messagebox.showwarning("입력 오류", "이 식자재를 공급하는 공급자가 없습니다.")
-            return
-        
-        supplier_id = supplier[0]  # 공급자 ID
+            # 프로시저 실행
+        connectDB.execute_query(query, params)
+            
+        show_stock()  # 재고 목록 갱신
 
-        # 새로운 재고 추가 (supplier_id 추가)
-        sql = """
-        INSERT INTO stock (ingredient_id, quantity, received_date, expiration_date, supplier_id, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        params = (ingredient_id, quantity, received_date, expiration_date, supplier_id, datetime.now())
-        if connectDB.execute_query(sql, params):
-            messagebox.showinfo("성공", "재고가 추가되었습니다.")
-            show_stock()
 
     def show_stock():
         """재고 목록 표시"""
         tree.delete(*tree.get_children())
-        
-        # 재고 목록과 재료 이름 및 공급자 정보를 함께 조회
-        query = """
-        SELECT s.id, s.ingredient_id, i.name, s.quantity, s.received_date, s.expiration_date, su.name AS supplier_name
-        FROM stock s
-        JOIN ingredients i ON s.ingredient_id = i.id
-        LEFT JOIN suppliers su ON s.supplier_id = su.id  -- stock 테이블에서 supplier_id를 직접 가져옴
-        ORDER BY s.id ASC
-        """
+
+        # MySQL 프로시저 호출
+        query = "CALL get_stock_list()"
         rows = connectDB.fetch_data(query)
-        
+
         for row in rows:
             tree.insert("", "end", values=row)
+
 
     # UI 구성
     tk.Label(stock_window, text="음식 선택:").pack()
@@ -242,21 +205,15 @@ def food_recipe_screen():
     food_recipe_window = tk.Toplevel(root)
     food_recipe_window.title("음식 레시피 관리")
 
-    def get_food_recipes():
+    def get_food_recipes(food_name):
         """음식과 해당 재료 목록을 가져옵니다."""
-        food_name = food_combobox.get()
         if not food_name:
             return []
-        
-        query = """
-        SELECT i.name, fi.quantity, i.unit
-        FROM food_ingredients fi
-        JOIN ingredients i ON fi.ingredient_id = i.id
-        JOIN foods f ON fi.food_id = f.id
-        WHERE f.name = %s
-        """
+
+        query = "CALL GetFoodRecipes(%s)"
         return connectDB.fetch_data(query, (food_name,))
-    
+
+
     def show_food_recipes():
         """음식 레시피와 재고 상태를 표시"""
         food_name = food_combobox.get()
@@ -310,12 +267,9 @@ def food_recipe_screen():
             messagebox.showwarning("입력 오류", "모든 필드를 입력해주세요.")
             return
 
-        sql = """
-        INSERT INTO food_ingredients (food_id, ingredient_id, quantity)
-        SELECT f.id, %s, %s FROM foods f WHERE f.name = %s
-        """
-        params = (ingredient_id, quantity, food_name)
-        if connectDB.execute_query(sql, params):
+        query = "CALL AddRecipe(%s, %s, %s)"
+        params = (food_name, ingredient_id, quantity)
+        if connectDB.execute_query(query, params):
             messagebox.showinfo("성공", "음식 레시피가 추가되었습니다.")
             show_food_recipes()
 
@@ -329,14 +283,9 @@ def food_recipe_screen():
             messagebox.showwarning("입력 오류", "모든 필드를 입력해주세요.")
             return
 
-        sql = """
-        UPDATE food_ingredients
-        SET quantity = %s
-        WHERE food_id = (SELECT id FROM foods WHERE name = %s) 
-        AND ingredient_id = %s
-        """
-        params = (quantity, food_name, ingredient_id)
-        if connectDB.execute_query(sql, params):
+        query = "CALL UpdateRecipe(%s, %s, %s)"
+        params = (food_name, ingredient_id, quantity)
+        if connectDB.execute_query(query, params):
             messagebox.showinfo("성공", "음식 레시피가 수정되었습니다.")
             show_food_recipes()
 
@@ -350,21 +299,26 @@ def food_recipe_screen():
             messagebox.showwarning("입력 오류", "모든 필드를 입력해주세요.")
             return
         
-        sql = """
-        INSERT INTO foods (name, price, description, created_at)
-        VALUES (%s, %s, %s, %s)
-        """
-        params = (food_name, price, description, datetime.now())
-        if connectDB.execute_query(sql, params):
+        query = "CALL AddFood(%s, %s, %s)"
+        params = (food_name, price, description)
+        if connectDB.execute_query(query, params):
             messagebox.showinfo("성공", f"{food_name} 음식이 추가되었습니다.")
             # 음식 추가 후, 콤보박스에 새로운 음식 추가
             food_combobox['values'] = food_combobox['values'] + (food_name,)
             food_combobox.set(food_name)  # 추가된 음식으로 자동 설정
             show_food_recipes()
 
-    # UI 구성
-    tk.Label(food_recipe_window, text="음식 선택:").pack()
-    food_combobox = ttk.Combobox(food_recipe_window, values=["Tomato Salad", "Chicken Pizza", "Olive Oil Dressing"])
+
+    def get_food_list():
+        """음식 목록을 데이터베이스에서 가져옴"""
+        query = "SELECT name FROM foods ORDER BY name ASC"
+        return connectDB.fetch_data(query)
+
+    # 음식 목록을 가져와서 콤보박스에 설정
+    food_list = get_food_list()
+    food_names = [food[0] for food in food_list]  # 음식 이름만 추출
+    food_combobox = ttk.Combobox(food_recipe_window, values=food_names)
+    
     food_combobox.pack()
 
     frame_recipes = tk.Frame(food_recipe_window)

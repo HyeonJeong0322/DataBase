@@ -10,4 +10,5 @@ Dongguk University Database Designe File
 - mysql
 
 database 명세서
+
 <img width="567" alt="명세서" src="https://github.com/user-attachments/assets/3d17571a-b17f-4f78-aac2-f507a24a7399">

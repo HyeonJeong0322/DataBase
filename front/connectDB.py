@@ -1,7 +1,7 @@
 from tkinter import messagebox
 import pymysql
 
-# 데이터베이스 연결 설정
+# 데이터베이스 연결 설정, 사용자 생성 후 실행
 def connect_to_db():
     return pymysql.connect(
         host='localhost', user='tester01', password='123456', db='new1', charset='utf8'
